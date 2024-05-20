@@ -4,7 +4,6 @@ use std::hash::{Hash, Hasher};
 use std::{fs::File, time::Duration};
 use std::io::{self, Write};
 use rodio::{Decoder, OutputStream, source::Source};
-use rfd::FileDialog;
 
 
 struct Song {
@@ -36,7 +35,7 @@ impl Song {
         let (_stream, stream_handle) = OutputStream::try_default().unwrap();
         // Load a sound from a file, using a path relative to Cargo.toml
         let file = io::BufReader::new(File::open(&self.file_path).unwrap());
-        // Decode that sound file into a source, supports Supports MP3, WAV, Ogg Vorbis and Flac.
+        // Decode that sound file into a source, supports MP3, WAV, Ogg Vorbis and Flac.
         let source = Decoder::new(file).unwrap();
 
         // Get the duration of the audio file
@@ -60,7 +59,7 @@ impl Song {
     }
 }
 
-fn handle_command(command: String) {
+fn handle_command(command: String, main: &mut Playlist) {
     let command_parts: Vec<&str> = command.trim().split_whitespace().collect();
     if command_parts.is_empty() {
         println!("No command entered.");
@@ -71,37 +70,35 @@ fn handle_command(command: String) {
         "search" => {
             if command_parts.len() > 1 {
                 let keyword = command_parts[1..].join(" ");
-                search_song(Some(keyword));
+                main.search_song(Some(keyword));
             } else {
-                search_song(None);
+                main.search_song(None);
             }
         },
         "add" => {
-            // if command_parts.len() < 3 {
-            //     println!("Usage: add {{Title}} {{Artist}}");
-            // } else {
-            //     let title = command_parts[1];
-            //     let artist = command_parts[2];
-            //     add_song(title, artist);
-            // }
-            let keyphrases: Vec<&str> = command.split(' ').collect();
-            
-            
+            if command_parts.len() < 3 {
+                println!("Usage: add {{Title}} {{Artist}} {{file_path}}");
+            } else {
+                let title = command_parts[1];
+                let artist = command_parts[2];
+                let file_path = command_parts[3];
+                main.add_song(title, artist, file_path);
+            }
         },
         "remove" => {
             if command_parts.len() < 2 {
                 println!("Usage: remove {{UID}}");
             } else {
-                let uid = command_parts[1];
-                remove_song(uid);
+                let uid = command_parts[1].parse::<u64>().unwrap_or(0);
+                main.remove_song(uid);
             }
         },
         "play" => {
             if command_parts.len() < 2 {
                 println!("Usage: play {{UID}}");
             } else {
-                let uid = command_parts[1];
-                play_song(uid);
+                let uid = command_parts[1].parse::<u64>().unwrap_or(0);
+                main.play_song(uid);
             }
         },
         _ => {
@@ -122,24 +119,44 @@ impl Playlist {
         }
     }
     
-    fn search_song(keywords: Option<String>) {
-        // Placeholder function for searching songs
-        
+    fn search_song(&self, keywords: Option<String>) {
+        match keywords {
+            Some(keyword) => {
+                for song in self.songs.values() {
+                    if song.title.contains(&keyword) || song.artist.contains(&keyword) {
+                        println!("Found: {} by {} (ID: {})", song.title, song.artist, song.id);
+                    }
+                }
+            },
+            None => {
+                for song in self.songs.values() {
+                    println!("{} by {} (ID: {})", song.title, song.artist, song.id);
+                }
+            }
+        }
     }
 
-    fn add_song(title: &str, artist: &str) {
-        // Placeholder function for adding a song
-        
+    fn add_song(&mut self, title: &str, artist: &str, file_path: &str) {
+        //MP3, WAV, Ogg Vorbis and Flac
+        let song = Song::new(title, artist, file_path);
+        self.songs.insert(song.id, song);
+        println!("Added song: {} by {}", title, artist);
     }
 
-    fn remove_song(uid: &str) {
-        // Placeholder function for removing a song
-        
+    fn remove_song(&mut self, uid: u64) {
+        if self.songs.remove(&uid).is_some() {
+            println!("Removed song with ID {}", uid);
+        } else {
+            println!("Song with ID {} not found.", uid);
+        }
     }
 
-    fn play_song(uid: &str) {
-        // Placeholder function for playing a song
-        
+    fn play_song(&self, uid: u64) {
+        if let Some(song) = self.songs.get(&uid) {
+            song.play();
+        } else {
+            println!("Song with ID {} not found.", uid);
+        }
     }
 }
 
@@ -154,7 +171,7 @@ fn main() {
                 .read_line(&mut command)
                 .expect("Failed to read line");
         println!();
-        handle_command(command);
+        handle_command(command, &mut main);
         print!("Please enter a command: ");
         io::stdout().flush().unwrap();
     }
